@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Klaviyo Support Tools Analytics</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
+<style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f4f9; color: #1a1a2e; font-size: 13px; min-height: 100vh; }
+
+/* ── Loading ── */
+#loading {
+  position: fixed; inset: 0; background: #f0f4f9;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; z-index: 100;
+}
+.spinner {
+  width: 40px; height: 40px; border: 3px solid #dbeafe; border-top-color: #3b82f6;
+  border-radius: 50%; animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+#loading p { color: #64748b; font-size: 13px; }
+
+/* ── Top bar ── */
+.topbar {
+  background: #1F3864; color: #fff;
+  padding: 12px 20px; display: flex; align-items: center; justify-content: space-between;
+}
+.topbar h1 { font-size: 15px; font-weight: 600; }
+.topbar .meta { font-size: 11px; opacity: 0.65; margin-top: 2px; }
+.topbar .refresh-btn {
+  background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);
+  color: #fff; padding: 5px 12px; border-radius: 6px; font-size: 11px; cursor: pointer;
+  transition: background 0.15s;
+}
+.topbar .refresh-btn:hover { background: rgba(255,255,255,0.25); }
+
+/* ── Filters ── */
+.filters {
+  background: #fff; border-bottom: 1px solid #e2e8f0;
+  padding: 10px 20px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+}
+.filters label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #94a3b8; }
+.filters select {
+  padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 6px;
+  font-size: 12px; background: #f8fafc; color: #1a1a2e; cursor: pointer;
+}
+.filters select:focus { outline: 2px solid #3b82f6; border-color: transparent; }
+.sep { width: 1px; height: 22px; background: #e2e8f0; }
+.reset-btn {
+  padding: 5px 12px; background: #f1f5f9; border: 1px solid #cbd5e1;
+  border-radius: 6px; font-size: 12px; cursor: pointer; color: #475569;
+}
+.reset-btn:hover { background: #e2e8f0; }
+#summary-text { margin-left: auto; font-size: 11px; color: #64748b; }
+
+/* ── Layout ── */
+.main { padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; }
+
+/* ── Scorecards ── */
+.cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.card {
+  background: #fff; border-radius: 10px; padding: 14px 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06); border-left: 4px solid;
+}
+.card.blue   { border-color: #3b82f6; }
+.card.green  { border-color: #22c55e; }
+.card.purple { border-color: #a855f7; }
+.card.amber  { border-color: #f59e0b; }
+.card .lbl   { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #94a3b8; margin-bottom: 4px; }
+.card .val   { font-size: 28px; font-weight: 700; color: #1F3864; line-height: 1.1; }
+.card .sub   { font-size: 11px; color: #64748b; margin-top: 3px; }
+
+/* ── Panels ── */
+.row2 { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; }
+.row3 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.panel {
+  background: #fff; border-radius: 10px; padding: 14px 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+.panel h2 {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
+  color: #64748b; margin-bottom: 10px;
+}
+.ch { position: relative; height: 200px; }
+
+/* ── Table ── */
+.tbl-wrap { max-height: 280px; overflow-y: auto; border-radius: 6px; border: 1px solid #f1f5f9; }
+table { width: 100%; border-collapse: collapse; }
+thead th {
+  background: #1F3864; color: #fff; padding: 8px 10px;
+  text-align: left; font-size: 11px; font-weight: 600;
+  position: sticky; top: 0; z-index: 1; white-space: nowrap;
+}
+tbody tr:nth-child(even) { background: #f8fafc; }
+tbody tr:hover { background: #dbeafe; }
+tbody td { padding: 6px 10px; font-size: 11px; border-bottom: 1px solid #f1f5f9; }
+.tag {
+  display: inline-block; padding: 1px 7px; border-radius: 9999px;
+  font-size: 10px; font-weight: 600;
+}
+.t-hub          { background: #dbeafe; color: #1d4ed8; }
+.t-css_inspector{ background: #dcfce7; color: #15803d; }
+.t-dns_verifier { background: #fef9c3; color: #854d0e; }
+.t-kd_debugger  { background: #fae8ff; color: #86198f; }
+.t-test_tool    { background: #ffe4e6; color: #be123c; }
+.t-other        { background: #f1f5f9; color: #64748b; }
+.no-data        { text-align: center; padding: 24px; color: #94a3b8; }
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <p>Loading live data from Google Sheets…</p>
+</div>
+
+<div id="app" style="display:none">
+  <div class="topbar">
+    <div>
+      <div class="h1" style="font-size:15px;font-weight:600;">Klaviyo Support Tools Analytics</div>
+      <div class="meta" id="metaLine">Loading…</div>
+    </div>
+    <button class="refresh-btn" onclick="loadData()">↺ Refresh</button>
+  </div>
+
+  <div class="filters">
+    <label>Date</label>
+    <select id="fDate"><option value="">All Days</option></select>
+    <div class="sep"></div>
+    <label>Agent</label>
+    <select id="fAgent"><option value="">All Agents</option></select>
+    <div class="sep"></div>
+    <label>Tool</label>
+    <select id="fTool"><option value="">All Tools</option></select>
+    <div class="sep"></div>
+    <label>Action</label>
+    <select id="fAction"><option value="">All Actions</option></select>
+    <div class="sep"></div>
+    <button class="reset-btn" onclick="resetFilters()">↺ Reset</button>
+    <span id="summary-text"></span>
+  </div>
+
+  <div class="main">
+    <div class="cards">
+      <div class="card blue">
+        <div class="lbl">Total Events</div>
+        <div class="val" id="sc1">—</div>
+        <div class="sub" id="sc1s">—</div>
+      </div>
+      <div class="card green">
+        <div class="lbl">Active Agents</div>
+        <div class="val" id="sc2">—</div>
+        <div class="sub" id="sc2s">identified emails</div>
+      </div>
+      <div class="card purple">
+        <div class="lbl">Top Tool</div>
+        <div class="val" id="sc3">—</div>
+        <div class="sub" id="sc3s">most events</div>
+      </div>
+      <div class="card amber">
+        <div class="lbl">Peak Day</div>
+        <div class="val" id="sc4">—</div>
+        <div class="sub" id="sc4s">events</div>
+      </div>
+    </div>
+
+    <div class="row2">
+      <div class="panel">
+        <h2>Events Per Day</h2>
+        <div class="ch"><canvas id="lineChart"></canvas></div>
+      </div>
+      <div class="panel">
+        <h2>By Tool</h2>
+        <div class="ch"><canvas id="pieChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="row3">
+      <div class="panel">
+        <h2>By Agent</h2>
+        <div class="ch"><canvas id="barChart"></canvas></div>
+      </div>
+      <div class="panel">
+        <h2>Tool Breakdown Per Day</h2>
+        <div class="ch"><canvas id="stackChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Event Log — <span id="tblTitle">All Records</span></h2>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Agent</th>
+              <th>Tool</th>
+              <th>Action</th>
+              <th>Detail</th>
+              <th>Domain</th>
+            </tr>
+          </thead>
+          <tbody id="tblBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const EMBEDDED_DATA = [{"ts":"2026-06-19T09:00:00.000Z","agent":"test@klaviyo.com","tool":"test_tool","action":"test_action","detail":"test_detail","domain":"test.com"},{"ts":"2026-06-19T13:04:10.170Z","agent":"(unidentified)","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-19T13:04:34.148Z","agent":"(unidentified)","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-19T13:04:34.678Z","agent":"(unidentified)","tool":"hub","action":"tool_opened","detail":"debug","domain":""},{"ts":"2026-06-19T13:05:21.036Z","agent":"(unidentified)","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-19T13:05:22.325Z","agent":"(unidentified)","tool":"hub","action":"tool_opened","detail":"dns","domain":""},{"ts":"2026-06-19T13:05:24.291Z","agent":"(unidentified)","tool":"dns_verifier","action":"dns_verify_run","detail":"newsletter.47brand.eu","domain":"newsletter.47brand.eu"},{"ts":"2026-06-19T13:05:31.152Z","agent":"(unidentified)","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-19T13:05:46.001Z","agent":"(unidentified)","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-19T13:05:47.220Z","agent":"(unidentified)","tool":"hub","action":"tool_opened","detail":"CSS Conflict Inspector","domain":""},{"ts":"2026-06-19T13:05:51.931Z","agent":"(unidentified)","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-19T13:05:52.104Z","agent":"(unidentified)","tool":"hub","action":"tool_opened","detail":"CSS Conflict Inspector","domain":""},{"ts":"2026-06-19T13:07:55.946Z","agent":"(unidentified)","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-19T13:08:06.775Z","agent":"(unidentified)","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-19T13:08:07.337Z","agent":"(unidentified)","tool":"hub","action":"tool_opened","detail":"Klaviyo Debugger","domain":""},{"ts":"2026-06-19T13:09:46.353Z","agent":"(unidentified)","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-19T13:09:49.033Z","agent":"(unidentified)","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-19T13:09:49.637Z","agent":"(unidentified)","tool":"hub","action":"tool_opened","detail":"CSS Conflict Inspector","domain":""},{"ts":"2026-06-19T13:09:57.434Z","agent":"(unidentified)","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-19T13:09:58.141Z","agent":"(unidentified)","tool":"hub","action":"tool_opened","detail":"DNS Verifier","domain":""},{"ts":"2026-06-19T13:09:58.961Z","agent":"(unidentified)","tool":"dns_verifier","action":"dns_verify_run","detail":"newsletter.47brand.eu","domain":"newsletter.47brand.eu"},{"ts":"2026-06-19T13:10:39.022Z","agent":"(unidentified)","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-19T13:10:39.587Z","agent":"(unidentified)","tool":"hub","action":"tool_opened","detail":"CSS Conflict Inspector","domain":""},{"ts":"2026-06-19T13:11:41.375Z","agent":"(unidentified)","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-19T13:11:43.518Z","agent":"(unidentified)","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-19T13:11:45.587Z","agent":"(unidentified)","tool":"hub","action":"tool_opened","detail":"DNS Verifier","domain":""},{"ts":"2026-06-19T13:11:45.721Z","agent":"(unidentified)","tool":"dns_verifier","action":"dns_verify_run","detail":"newsletter.47brand.eu","domain":"newsletter.47brand.eu"},{"ts":"2026-06-19T13:11:55.095Z","agent":"(unidentified)","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-19T13:11:55.660Z","agent":"(unidentified)","tool":"hub","action":"tool_opened","detail":"CSS Conflict Inspector","domain":""},{"ts":"2026-06-19T13:12:21.058Z","agent":"(unidentified)","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-19T13:12:22.162Z","agent":"(unidentified)","tool":"hub","action":"tool_opened","detail":"Klaviyo Debugger","domain":""},{"ts":"2026-06-19T13:13:29.822Z","agent":"(unidentified)","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-19T13:13:31.105Z","agent":"(unidentified)","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-19T13:13:31.888Z","agent":"(unidentified)","tool":"hub","action":"tool_opened","detail":"CSS Conflict Inspector","domain":""},{"ts":"2026-06-19T13:13:38.347Z","agent":"(unidentified)","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-19T13:13:38.952Z","agent":"(unidentified)","tool":"hub","action":"tool_opened","detail":"Klaviyo Debugger","domain":""},{"ts":"2026-06-19T13:15:38.334Z","agent":"(unidentified)","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-19T13:15:40.433Z","agent":"(unidentified)","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-19T13:15:41.591Z","agent":"(unidentified)","tool":"hub","action":"tool_opened","detail":"CSS Conflict Inspector","domain":""},{"ts":"2026-06-19T13:18:52.970Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-19T13:18:55.486Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-19T13:18:56.292Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"Klaviyo Debugger","domain":""},{"ts":"2026-06-19T13:20:55.785Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-19T13:21:20.343Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-19T13:21:21.175Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"CSS Conflict Inspector","domain":""},{"ts":"2026-06-19T13:22:44.651Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-19T14:07:55.601Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-19T14:10:44.339Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-19T14:10:44.757Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"CSS Conflict Inspector","domain":""},{"ts":"2026-06-19T14:31:53.183Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-19T14:31:55.067Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-19T14:31:55.249Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"Klaviyo Debugger","domain":""},{"ts":"2026-06-19T14:33:06.148Z","agent":"sakariye.ali@klaviyo.com","tool":"kd_debugger","action":"diagnose_run","detail":"flows:chronosphere","domain":""},{"ts":"2026-06-19T14:33:18.957Z","agent":"sakariye.ali@klaviyo.com","tool":"kd_debugger","action":"diagnose_run","detail":"flows:chronosphere","domain":""},{"ts":"2026-06-20T17:54:41.899Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T17:54:42.840Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"CSS Conflict Inspector","domain":""},{"ts":"2026-06-20T18:00:41.928Z","agent":"sakariye.ali@klaviyo.com","tool":"css_inspector","action":"scan_run","detail":"scan_page","domain":"www.acekouture.com"},{"ts":"2026-06-20T18:00:59.661Z","agent":"sakariye.ali@klaviyo.com","tool":"css_inspector","action":"clear_session_used","detail":"","domain":"www.acekouture.com"},{"ts":"2026-06-20T18:01:48.812Z","agent":"sakariye.ali@klaviyo.com","tool":"css_inspector","action":"scan_run","detail":"scan_page","domain":"saucetown.co"},{"ts":"2026-06-20T18:02:59.435Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T18:03:00.348Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"CSS Conflict Inspector","domain":""},{"ts":"2026-06-20T18:03:02.758Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T18:05:30.894Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T18:05:31.924Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"Klaviyo Debugger","domain":""},{"ts":"2026-06-20T18:06:09.048Z","agent":"sakariye.ali@klaviyo.com","tool":"kd_debugger","action":"diagnose_run","detail":"flows:chronosphere","domain":""},{"ts":"2026-06-20T18:08:17.904Z","agent":"sakariye.ali@klaviyo.com","tool":"kd_debugger","action":"diagnose_run","detail":"flows:chronosphere","domain":""},{"ts":"2026-06-20T18:08:44.806Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T18:08:47.844Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T18:09:50.906Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T18:11:23.787Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"zd_toggle_changed","detail":"enabled","domain":""},{"ts":"2026-06-20T18:12:34.277Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T18:12:35.447Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"CSS Conflict Inspector","domain":""},{"ts":"2026-06-20T18:12:37.489Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T18:12:38.361Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"CSS Conflict Inspector","domain":""},{"ts":"2026-06-20T18:12:39.934Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T18:12:40.683Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"CSS Conflict Inspector","domain":""},{"ts":"2026-06-20T18:12:45.485Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T18:12:46.374Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"CSS Conflict Inspector","domain":""},{"ts":"2026-06-20T18:12:50.539Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T18:12:51.378Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"CSS Conflict Inspector","domain":""},{"ts":"2026-06-20T18:13:28.686Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T18:13:29.678Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"CSS Conflict Inspector","domain":""},{"ts":"2026-06-20T18:13:32.394Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T18:13:32.930Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"Klaviyo Debugger","domain":""},{"ts":"2026-06-20T18:13:34.786Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T18:13:35.737Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"DNS Verifier","domain":""},{"ts":"2026-06-20T18:13:42.233Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T18:13:43.926Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"CSS Conflict Inspector","domain":""},{"ts":"2026-06-20T18:13:48.278Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T18:13:48.915Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"CSS Conflict Inspector","domain":""},{"ts":"2026-06-20T18:14:41.703Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T18:14:43.766Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T18:14:44.473Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"CSS Conflict Inspector","domain":""},{"ts":"2026-06-20T18:14:46.110Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T18:14:46.942Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"CSS Conflict Inspector","domain":""},{"ts":"2026-06-20T18:14:48.808Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T18:14:49.427Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"CSS Conflict Inspector","domain":""},{"ts":"2026-06-20T18:14:50.762Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T18:14:52.519Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"CSS Conflict Inspector","domain":""},{"ts":"2026-06-20T18:14:53.080Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T18:14:53.781Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"CSS Conflict Inspector","domain":""},{"ts":"2026-06-20T18:14:55.425Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T18:14:56.725Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"CSS Conflict Inspector","domain":""},{"ts":"2026-06-20T18:14:57.733Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T18:14:58.586Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"CSS Conflict Inspector","domain":""},{"ts":"2026-06-20T18:15:00.404Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T18:15:01.448Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"CSS Conflict Inspector","domain":""},{"ts":"2026-06-20T18:15:03.123Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T18:15:03.817Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"CSS Conflict Inspector","domain":""},{"ts":"2026-06-20T18:15:04.703Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T18:15:05.133Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"Klaviyo Debugger","domain":""},{"ts":"2026-06-20T18:15:07.327Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T18:15:07.942Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"Klaviyo Debugger","domain":""},{"ts":"2026-06-20T18:15:10.006Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T18:15:10.748Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"Klaviyo Debugger","domain":""},{"ts":"2026-06-20T18:15:12.184Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T18:15:13.703Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"DNS Verifier","domain":""},{"ts":"2026-06-20T18:15:15.737Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T18:15:17.079Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"DNS Verifier","domain":""},{"ts":"2026-06-20T18:15:18.866Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T18:15:19.458Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"Klaviyo Debugger","domain":""},{"ts":"2026-06-20T18:15:21.309Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T18:15:22.294Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"CSS Conflict Inspector","domain":""},{"ts":"2026-06-20T18:15:32.358Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T18:15:45.204Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T18:23:53.797Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T18:27:12.203Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T18:31:59.141Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T20:15:13.145Z","agent":"(unidentified)","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T20:15:16.516Z","agent":"(unidentified)","tool":"hub","action":"tool_opened","detail":"CSS Conflict Inspector","domain":""},{"ts":"2026-06-20T20:15:18.049Z","agent":"(unidentified)","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T20:15:18.633Z","agent":"(unidentified)","tool":"hub","action":"tool_opened","detail":"CSS Conflict Inspector","domain":""},{"ts":"2026-06-20T20:15:21.188Z","agent":"(unidentified)","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T20:15:22.228Z","agent":"(unidentified)","tool":"hub","action":"tool_opened","detail":"Klaviyo Debugger","domain":""},{"ts":"2026-06-20T20:15:23.918Z","agent":"(unidentified)","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T20:15:24.717Z","agent":"(unidentified)","tool":"hub","action":"tool_opened","detail":"DNS Verifier","domain":""},{"ts":"2026-06-20T20:15:26.804Z","agent":"(unidentified)","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T20:31:51.589Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-20T20:31:52.898Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"CSS Conflict Inspector","domain":""},{"ts":"2026-06-21T12:38:44.150Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-21T12:39:10.657Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-21T12:39:12.289Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"CSS Conflict Inspector","domain":""},{"ts":"2026-06-21T12:39:50.320Z","agent":"sakariye.ali@klaviyo.com","tool":"css_inspector","action":"scan_run","detail":"scan_page","domain":"saucetown.co"},{"ts":"2026-06-21T12:41:02.734Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-21T12:41:03.582Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"Klaviyo Debugger","domain":""},{"ts":"2026-06-21T12:41:39.818Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-21T12:42:00.542Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"DNS Verifier","domain":""},{"ts":"2026-06-21T12:42:09.730Z","agent":"sakariye.ali@klaviyo.com","tool":"dns_verifier","action":"dns_verify_run","detail":"newsletter.47brand.eu","domain":"newsletter.47brand.eu"},{"ts":"2026-06-21T12:42:34.495Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-21T13:06:13.948Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-22T05:38:26.379Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-22T08:13:56.392Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-22T08:14:02.677Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"CSS Conflict Inspector","domain":""},{"ts":"2026-06-22T08:14:05.789Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-22T08:14:06.120Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"Klaviyo Debugger","domain":""},{"ts":"2026-06-22T08:14:09.696Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-22T09:08:37.246Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-22T09:50:15.981Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-22T09:50:16.503Z","agent":"sakariye.ali@klaviyo.com","tool":"hub","action":"tool_opened","detail":"CSS Conflict Inspector","domain":""},{"ts":"2026-06-22T09:54:04.090Z","agent":"sakariye.ali@klaviyo.com","tool":"(no tool)","action":"","detail":"","domain":""},{"ts":"2026-06-23T11:36:19.209Z","agent":"(unidentified)","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-23T11:36:42.150Z","agent":"(unidentified)","tool":"hub","action":"tool_opened","detail":"CSS Conflict Inspector","domain":""},{"ts":"2026-06-23T11:38:36.104Z","agent":"(unidentified)","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-23T11:38:40.294Z","agent":"(unidentified)","tool":"hub","action":"tool_opened","detail":"DNS Verifier","domain":""},{"ts":"2026-06-23T21:35:58.530Z","agent":"logan.patureau@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-24T06:41:37.372Z","agent":"sakariye.ali@klaviyo.com","tool":"(no tool)","action":"","detail":"","domain":""},{"ts":"2026-06-24T14:11:52.678Z","agent":"(unidentified)","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-24T14:18:13.577Z","agent":"(unidentified)","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-24T14:18:17.778Z","agent":"(unidentified)","tool":"hub","action":"tool_opened","detail":"CSS Conflict Inspector","domain":""},{"ts":"2026-06-24T14:18:25.731Z","agent":"(unidentified)","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-24T14:36:51.744Z","agent":"logan.patureau@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-24T16:59:47.352Z","agent":"tanner.osterberg@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-24T16:59:53.230Z","agent":"tanner.osterberg@klaviyo.com","tool":"hub","action":"zd_toggle_changed","detail":"enabled","domain":""},{"ts":"2026-06-24T17:00:14.262Z","agent":"tanner.osterberg@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-24T17:00:18.260Z","agent":"tanner.osterberg@klaviyo.com","tool":"hub","action":"zd_toggle_changed","detail":"disabled","domain":""},{"ts":"2026-06-24T17:13:15.300Z","agent":"tanner.osterberg@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-24T17:13:17.301Z","agent":"tanner.osterberg@klaviyo.com","tool":"hub","action":"zd_toggle_changed","detail":"enabled","domain":""},{"ts":"2026-06-24T19:21:04.979Z","agent":"tanner.osterberg@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-24T21:08:14.586Z","agent":"tanner.osterberg@klaviyo.com","tool":"hub","action":"hub_opened","detail":"","domain":""},{"ts":"2026-06-24T21:08:15.821Z","agent":"tanner.osterberg@klaviyo.com","tool":"hub","action":"tool_opened","detail":"DNS Verifier","domain":""},{"ts":"2026-06-24T21:08:23.990Z","agent":"tanner.osterberg@klaviyo.com","tool":"dns_verifier","action":"dns_verify_run","detail":"send.visualizeyourvision.com","domain":"send.visualizeyourvision.com"},{"ts":"2026-06-25T07:31:54.757Z","agent":"sakariye.ali@klaviyo.com","tool":"(no tool)","action":"","detail":"","domain":""},{"ts":"2026-06-25T09:01:40.808Z","agent":"sakariye.ali@klaviyo.com","tool":"(no tool)","action":"","detail":"","domain":""},{"ts":"2026-06-25T09:30:08.947Z","agent":"sakariye.ali@klaviyo.com","tool":"(no tool)","action":"","detail":"","domain":""},{"ts":"2026-06-25T10:30:43.364Z","agent":"(unidentified)","tool":"(no tool)","action":"","detail":"","domain":""},{"ts":"2026-06-25T12:42:33.135Z","agent":"sakariye.ali@klaviyo.com","tool":"(no tool)","action":"","detail":"","domain":""},{"ts":"2026-06-25T14:11:32.572Z","agent":"(unidentified)","tool":"(no tool)","action":"","detail":"","domain":""},{"ts":"2026-06-25T15:56:26.590Z","agent":"alexandria.dills@klaviyo.com","tool":"(no tool)","action":"","detail":"","domain":""},{"ts":"2026-06-25T17:56:43.503Z","agent":"alesia.watkins@klaviyo.com","tool":"(no tool)","action":"","detail":"","domain":""},{"ts":"2026-06-26T07:11:20.063Z","agent":"sakariye.ali@klaviyo.com","tool":"(no tool)","action":"","detail":"","domain":""}];
+
+const TOOL_COLORS = {
+  hub:           '#3b82f6',
+  css_inspector: '#22c55e',
+  dns_verifier:  '#f59e0b',
+  kd_debugger:   '#a855f7',
+  test_tool:     '#ef4444',
+};
+const AGENT_PAL = ['#3b82f6','#22c55e','#a855f7','#f59e0b','#ef4444','#14b8a6','#f97316','#ec4899'];
+
+let ALL_EVENTS = [];
+let charts = {};
+
+// ── Parse CSV ────────────────────────────────────────────────────────────
+function parseCsv(text) {
+  const lines = text.split('\n').filter(l => l.trim());
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g,'').toLowerCase().replace(/\s+/g,'_'));
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    // Simple CSV parse — handle quoted fields
+    const cells = [];
+    let cur = '', inQ = false;
+    for (let c = 0; c < lines[i].length; c++) {
+      const ch = lines[i][c];
+      if (ch === '"') { inQ = !inQ; }
+      else if (ch === ',' && !inQ) { cells.push(cur); cur = ''; }
+      else { cur += ch; }
+    }
+    cells.push(cur);
+    const obj = {};
+    headers.forEach((h, j) => obj[h] = (cells[j] || '').trim());
+    rows.push(obj);
+  }
+  return rows;
+}
+
+// ── Format date for display ─────────────────────────────────────────────
+function fmtDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+function isoToDay(iso) { return iso ? iso.substring(0, 10) : ''; }
+function fmtTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+}
+
+// ── Load embedded data ─────────────────────────────────────────────────
+function loadData() {
+  ALL_EVENTS = EMBEDDED_DATA.map(r => ({
+    ts:     r.ts,
+    day:    isoToDay(r.ts),
+    agent:  r.agent || '(unidentified)',
+    tool:   r.tool  || '(no tool)',
+    action: r.action || '',
+    detail: r.detail || '',
+    domain: r.domain || '',
+  })).filter(e => e.ts);
+
+  document.getElementById('metaLine').textContent =
+    `${ALL_EVENTS.length} events · Data as of 26 Jun 2026`;
+
+  buildFilters();
+  render();
+
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+}
+
+// ── Build filter dropdowns ──────────────────────────────────────────────
+function buildFilters() {
+  const days    = [...new Set(ALL_EVENTS.map(e => e.day))].sort();
+  const agents  = [...new Set(ALL_EVENTS.map(e => e.agent).filter(a => a !== '(unidentified)'))].sort();
+  const tools   = [...new Set(ALL_EVENTS.map(e => e.tool))].sort();
+  const actions = [...new Set(ALL_EVENTS.map(e => e.action).filter(Boolean))].sort();
+
+  const fill = (id, items, fmt) => {
+    const el = document.getElementById(id);
+    const cur = el.value;
+    while (el.options.length > 1) el.remove(1);
+    items.forEach(v => {
+      const o = new Option(fmt ? fmt(v) : v, v);
+      el.appendChild(o);
+    });
+    if (items.includes(cur)) el.value = cur;
+  };
+  fill('fDate',   days,    d => { const dt = new Date(d); return dt.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}); });
+  fill('fAgent',  agents);
+  fill('fTool',   tools);
+  fill('fAction', actions);
+}
+
+function getFiltered() {
+  const fD  = document.getElementById('fDate').value;
+  const fA  = document.getElementById('fAgent').value;
+  const fT  = document.getElementById('fTool').value;
+  const fAc = document.getElementById('fAction').value;
+  return ALL_EVENTS.filter(e =>
+    (!fD  || e.day    === fD) &&
+    (!fA  || e.agent  === fA) &&
+    (!fT  || e.tool   === fT) &&
+    (!fAc || e.action === fAc)
+  );
+}
+
+function aggBy(arr, key) {
+  const m = {};
+  arr.forEach(e => m[e[key]] = (m[e[key]] || 0) + 1);
+  return m;
+}
+
+// ── Render everything ───────────────────────────────────────────────────
+function render() {
+  const ev = getFiltered();
+  const total = ev.length;
+
+  // Scorecards
+  document.getElementById('sc1').textContent = total.toLocaleString();
+  const days = [...new Set(ev.map(e => e.day))].sort();
+  document.getElementById('sc1s').textContent = `across ${days.length} day${days.length!==1?'s':''}`;
+
+  const knownAgents = new Set(ev.filter(e => e.agent !== '(unidentified)').map(e => e.agent));
+  document.getElementById('sc2').textContent = knownAgents.size;
+
+  const byTool = aggBy(ev, 'tool');
+  const topTool = Object.entries(byTool).sort((a,b)=>b[1]-a[1])[0];
+  document.getElementById('sc3').textContent = topTool ? topTool[0] : '—';
+  document.getElementById('sc3s').textContent = topTool ? `${topTool[1]} events` : '';
+
+  const byDay = aggBy(ev, 'day');
+  const peakDay = Object.entries(byDay).sort((a,b)=>b[1]-a[1])[0];
+  if (peakDay) {
+    const d = new Date(peakDay[0]);
+    document.getElementById('sc4').textContent = d.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+    document.getElementById('sc4s').textContent = `${peakDay[1]} events`;
+  }
+
+  document.getElementById('summary-text').textContent = `${total.toLocaleString()} events`;
+
+  // ── Line chart ─────────────────────────────────────────────────────
+  const allDays = [...new Set(ALL_EVENTS.map(e=>e.day))].sort();
+  const lineDays = allDays.filter(d => ev.some(e=>e.day===d));
+  const lineVals = lineDays.map(d => ev.filter(e=>e.day===d).length);
+  const lineLabels = lineDays.map(d => { const dt=new Date(d); return dt.toLocaleDateString('en-GB',{day:'numeric',month:'short'}); });
+
+  if (charts.line) charts.line.destroy();
+  charts.line = new Chart(document.getElementById('lineChart'), {
+    type: 'line',
+    data: {
+      labels: lineLabels,
+      datasets: [{
+        label: 'Events',
+        data: lineVals,
+        borderColor: '#3b82f6',
+        backgroundColor: 'rgba(59,130,246,0.1)',
+        pointBackgroundColor: '#3b82f6',
+        pointRadius: 5, pointHoverRadius: 7,
+        tension: 0.35, fill: true,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: '#f1f5f9' }, ticks: { font: { size: 10 } } },
+        y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { font: { size: 10 }, precision: 0 } }
+      }
+    }
+  });
+
+  // ── Pie/Doughnut chart ─────────────────────────────────────────────
+  const toolEntries = Object.entries(byTool).sort((a,b)=>b[1]-a[1]);
+  if (charts.pie) charts.pie.destroy();
+  charts.pie = new Chart(document.getElementById('pieChart'), {
+    type: 'doughnut',
+    data: {
+      labels: toolEntries.map(e=>e[0]),
+      datasets: [{
+        data: toolEntries.map(e=>e[1]),
+        backgroundColor: toolEntries.map(e=>TOOL_COLORS[e[0]]||'#94a3b8'),
+        borderWidth: 2, borderColor: '#fff'
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { size: 10 }, boxWidth: 10, padding: 6 } },
+        tooltip: { callbacks: { label: ctx => `${ctx.label}: ${ctx.raw} (${((ctx.raw/total)*100).toFixed(1)}%)` } }
+      },
+      cutout: '55%'
+    }
+  });
+
+  // ── Bar chart (by agent) ───────────────────────────────────────────
+  const agentEntries = Object.entries(aggBy(ev,'agent')).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const shortA = a => a==='(unidentified)' ? a : (a.split('@')[0].substring(0,14));
+  if (charts.bar) charts.bar.destroy();
+  charts.bar = new Chart(document.getElementById('barChart'), {
+    type: 'bar',
+    data: {
+      labels: agentEntries.map(e=>shortA(e[0])),
+      datasets: [{
+        label: 'Events',
+        data: agentEntries.map(e=>e[1]),
+        backgroundColor: agentEntries.map((_,i)=>AGENT_PAL[i%AGENT_PAL.length]),
+        borderRadius: 4, borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      indexAxis: 'y',
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { title: ctx => agentEntries[ctx[0].dataIndex][0], label: ctx => `${ctx.raw} events` } }
+      },
+      scales: {
+        x: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { font: { size: 10 }, precision: 0 } },
+        y: { grid: { display: false }, ticks: { font: { size: 10 } } }
+      }
+    }
+  });
+
+  // ── Stacked bar (tool × day) ───────────────────────────────────────
+  const toolKeys = Object.keys(TOOL_COLORS);
+  const stackDatasets = toolKeys.map(tool => ({
+    label: tool,
+    data: lineDays.map(d => ev.filter(e=>e.day===d&&e.tool===tool).length),
+    backgroundColor: TOOL_COLORS[tool],
+    borderRadius: 2, borderSkipped: false,
+  })).filter(ds => ds.data.some(v=>v>0));
+
+  const otherData = lineDays.map(d => ev.filter(e=>e.day===d&&!TOOL_COLORS[e.tool]).length);
+  if (otherData.some(v=>v>0)) stackDatasets.push({ label:'(other)', data: otherData, backgroundColor:'#94a3b8', borderRadius:2 });
+
+  if (charts.stack) charts.stack.destroy();
+  charts.stack = new Chart(document.getElementById('stackChart'), {
+    type: 'bar',
+    data: { labels: lineLabels, datasets: stackDatasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position:'bottom', labels:{ font:{size:10}, boxWidth:10, padding:5 } } },
+      scales: {
+        x: { stacked:true, grid:{color:'#f1f5f9'}, ticks:{font:{size:10}} },
+        y: { stacked:true, beginAtZero:true, grid:{color:'#f1f5f9'}, ticks:{font:{size:10}, precision:0} }
+      }
+    }
+  });
+
+  // ── Table ───────────────────────────────────────────────────────────
+  const sorted = [...ev].sort((a,b)=>b.ts.localeCompare(a.ts));
+  const tbody = document.getElementById('tblBody');
+  document.getElementById('tblTitle').textContent = `${total.toLocaleString()} events`;
+
+  if (sorted.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" class="no-data">No events match the current filters.</td></tr>`;
+    return;
+  }
+
+  const toolTag = tool => {
+    const cls = TOOL_COLORS[tool] ? `t-${tool}` : 't-other';
+    return `<span class="tag ${cls}">${tool}</span>`;
+  };
+
+  tbody.innerHTML = sorted.slice(0, 300).map(e => `
+    <tr>
+      <td style="white-space:nowrap;color:#64748b">${fmtDate(e.ts)} ${fmtTime(e.ts)}</td>
+      <td>${e.agent}</td>
+      <td>${toolTag(e.tool)}</td>
+      <td style="color:#475569">${e.action}</td>
+      <td style="color:#94a3b8;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.detail}</td>
+      <td style="color:#94a3b8">${e.domain}</td>
+    </tr>`).join('');
+}
+
+function resetFilters() {
+  ['fDate','fAgent','fTool','fAction'].forEach(id => document.getElementById(id).value = '');
+  render();
+}
+['fDate','fAgent','fTool','fAction'].forEach(id =>
+  document.getElementById(id).addEventListener('change', render)
+);
+
+loadData();
+</script>
+</body>
+</html>
